@@ -1,0 +1,61 @@
+{% extends "www/base.html" %}
+{% load i18n %}
+{% block content %}
+
+<div class="container">
+
+    <h1>{% trans 'Your reservations' %}</h1>
+
+    <table class="table">
+    <thead>
+        <tr>
+            <th>{% trans 'Name' %}</th>
+            <th>{% trans 'Reservation time' %}</th>
+            <th>{% trans 'Status' %}</th>
+            <th>{% trans 'Price per month' %}</th>
+            <th>{% trans 'Reference number' %}</th>
+            <th>{% trans 'Price' %}</th>
+            <th>{% trans 'Actions' %}</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>A1</td>
+            <td>01.10.2020-01.11.2020</td>
+            <td>{% trans 'Active' %}</td>
+            <td>30€</td>
+            <td>13300772055</td>
+            <td>90€</td>
+            <td>Tähän button</td>
+        </tr>
+    </tbody>
+    </table>
+
+    <h1>{% trans 'Storage units' %}</h1>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>{% trans 'Name' %}</th>
+                <th>{% trans 'Status' %}</th>
+                <th>{% trans 'Reserved by' %}</th>
+                <th>{% trans 'Reservation time' %}</th>
+                <th>{% trans 'Price per month' %}</th>
+                <th>{% trans 'Actions' %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>A1</td>
+                <td>Free</td>
+                <td></td>
+                <td></td>
+                <td>90€</td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+
+
+    {% endblock %}
+
