@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from . import models
 from django.utils import timezone
+from dateutil.relativedelta import relativedelta
 
 
 class StorageSerializer(serializers.ModelSerializer):
@@ -76,36 +77,30 @@ class StorageReservationCreateSerializer(serializers.ModelSerializer):
 
       Performs business rule validations:
     - Unit cannot already be reserved for the given period
-    - Start date must be today
-    - End date must be after start date
     - Reservation cannot exceed max_rental_months
     - Storage unit must be active (not disabled)
     - Storage service must allow self-subscription (if required)
     - User can only have one active/pending reservation at a time
     """
 
+    duration_months = serializers.IntegerField(
+        min_value=1, required=True, write_only=True
+    )
+
     class Meta:
         model = models.StorageReservation
-        fields = ("unit", "start_date", "end_date")
+        fields = ("unit", "duration_months")
 
     def validate(self, data):
         user = self.context["request"].user
         unit = data.get("unit")
-        start_date = data.get("start_date")
-        end_date = data.get("end_date")
+        duration_months = data.get("duration_months")
 
         if not unit:
             raise serializers.ValidationError("Storage unit is required.")
 
-        if not start_date or not end_date:
-            raise serializers.ValidationError("Start and end dates are required.")
-
-        if end_date < start_date:
-            raise serializers.ValidationError("End date must be after start date.")
-
-        today = timezone.now().date()
-        if start_date != today:
-            raise serializers.ValidationError("Reservation must start today.")
+        if duration_months < 1:
+            raise serializers.ValidationError("Duration must be at least 1 month.")
 
         if unit.is_disabled:
             raise serializers.ValidationError(
@@ -117,13 +112,13 @@ class StorageReservationCreateSerializer(serializers.ModelSerializer):
                 "Self-subscription is not allowed for this storage unit."
             )
 
-        duration_days = (end_date - start_date).days
-        duration_months = duration_days / 30.0
-
         if unit.max_rental_months and duration_months > unit.max_rental_months:
             raise serializers.ValidationError(
                 f"Reservation cannot exceed {unit.max_rental_months} months."
             )
+
+        start_date = timezone.now().date()
+        end_date = start_date + relativedelta(months=duration_months)
 
         overlapping = models.StorageReservation.objects.filter(
             unit=unit,
@@ -154,10 +149,13 @@ class StorageReservationCreateSerializer(serializers.ModelSerializer):
                     "You already have an active or pending reservation."
                 )
 
+        data["start_date"] = start_date
+        data["end_date"] = end_date
         return data
 
     def create(self, validated_data):
-        """Create reservation object (reference and payment handled in the view)."""
+        """Create reservation object that starts today and lasts given months."""
+        validated_data.pop("duration_months")
         return models.StorageReservation.objects.create(**validated_data)
 
 
