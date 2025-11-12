@@ -6,6 +6,8 @@ from django.template.loader import render_to_string
 from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
+
 from drfx import config
 from mailer import send_mail
 from users.models import (
@@ -16,6 +18,8 @@ from users.models import (
     ServiceSubscription,
 )
 from users.signals import application_approved, application_denied
+
+from storage.models import StorageReservation, StoragePayment
 
 from utils import referencenumber
 from utils.matrixoperations import MatrixOperations
@@ -116,6 +120,65 @@ class BusinessLogic:
 
                 for custominvoice in custominvoices:
                     transaction_user = custominvoice.user
+
+            # Search storage reservations for reference
+            if not transaction_user:
+                reservations = StorageReservation.objects.filter(
+                    reference_number=transaction.reference_number
+                )
+
+                for reservation in reservations:
+                    transaction_user = reservation.user
+
+                    try:
+                        amount = Decimal(str(transaction.amount))
+                    except (InvalidOperation, TypeError):
+                        logger.warning(
+                            f"Invalid transaction.amount for transaction {transaction.pk}: {transaction.amount}"
+                        )
+                        amount = Decimal("0")
+
+                    price = reservation.unit.price_per_month or Decimal("0")
+
+                    # Calculate how many months the payment covers
+                    months_to_add = 0
+                    if price > 0 and amount > 0:
+                        months_decimal = (amount / price).quantize(
+                            0, rounding=ROUND_DOWN
+                        )
+                        months_to_add = int(months_decimal)
+                    else:
+                        # fallback if missing price or amount
+                        months_to_add = 1 if amount > 0 else 0
+
+                    if reservation.is_active():
+                        try:
+                            months_added = reservation.extend(months_to_add)
+                            if months_added < months_to_add:
+                                logger.warning(
+                                    f"Reservation {reservation.id} reached maximum duration. "
+                                    f"Only added {months_added} out of {months_to_add} months."
+                                )
+                        except ValueError as e:
+                            logger.warning(
+                                f"Could not extend reservation {reservation.id}: {e}"
+                            )
+                            continue
+                    else:
+                        months_added = reservation.mark_as_paid(months_to_add)
+
+                    StoragePayment.objects.create(
+                        reservation=reservation,
+                        reference_number=transaction.reference_number,
+                        amount=transaction.amount,
+                        months=months_added,
+                        created_at=transaction.date,
+                    )
+
+                    logger.info(
+                        f"Updated reservation {reservation.id}: +{months_added} months "
+                        f"(total now {reservation.total_paid_months})"
+                    )
 
             if transaction_user:
                 transaction.user = transaction_user
