@@ -97,12 +97,21 @@ class StorageReservation(models.Model):
         today = timezone.now().date()
         return self.status == self.ACTIVE and self.start_date <= today <= self.end_date
 
-    def mark_as_paid(self):
+    def mark_as_paid(self, months):
         """Activate reservation when payment is received."""
         self.status = self.ACTIVE
         self.paid_at = timezone.now()
-        self.save(update_fields=["status", "paid_at"])
-        return True
+
+        limit = self.max_duration_months or self.unit.max_rental_months
+        current = self.total_paid_months or 0
+        months_to_add = min(months, limit - current) if limit is not None else months
+        self.total_paid_months = current + months_to_add
+
+        # Päivitetään end_date aina total_paid_months mukaan
+        self.end_date = self.start_date + relativedelta(months=self.total_paid_months)
+
+        self.save(update_fields=["status", "paid_at", "total_paid_months", "end_date"])
+        return months_to_add
 
     def expire_if_unpaid(self):
         """Expire reservation if payment deadline has passed."""
@@ -120,10 +129,22 @@ class StorageReservation(models.Model):
         """
         if months < 1:
             raise ValueError("Extension duration must be at least one month.")
-        new_total = self.total_paid_months + months
+
         limit = self.max_duration_months or self.unit.max_rental_months
-        if new_total > limit:
-            raise ValueError("Cannot extend beyond maximum allowed duration.")
-        self.end_date += relativedelta(months=months)
+        current = self.total_paid_months or 0
+
+        # Calculate how many months can be addeds
+        if limit is not None:
+            remaining = max(limit - current, 0)
+            if remaining == 0:
+                raise ValueError("Reservation already at maximum duration.")
+            months_to_add = min(months, remaining)
+        else:
+            months_to_add = months
+
+        new_total = current + months_to_add
         self.total_paid_months = new_total
+        self.end_date = self.start_date + relativedelta(months=self.total_paid_months)
+
         self.save(update_fields=["end_date", "total_paid_months"])
+        return months_to_add
