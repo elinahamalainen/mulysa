@@ -1,5 +1,4 @@
 from rest_framework import viewsets
-from rest_framework.response import Response
 from .models import StorageService, StorageUnit, StorageReservation, StoragePayment
 from .serializers import (
     StorageSerializer,
@@ -41,10 +40,10 @@ class ReservationViewSet(viewsets.ModelViewSet):
       - pending_until = the date the reservation has to be paid
     """
 
-    queryset = StorageReservation.objects.select_related('unit').all()
-    
+    queryset = StorageReservation.objects.select_related("unit").all()
+
     def get_serializer_class(self):
-        if self.action == 'create':
+        if self.action == "create":
             return StorageReservationCreateSerializer
         return StorageReservationSerializer
 
@@ -61,6 +60,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
         reservation.pending_until = timezone.now().date() + timedelta(
             days=service.pending_payment_days
         )
+
+        reservation.max_duration_months = reservation.unit.max_rental_months
         reservation.save()
 
 
@@ -71,7 +72,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
     """
 
     queryset = StoragePayment.objects.select_related("reservation").all()
-    
+
     def get_serializer_class(self):
         if self.action == "create":
             return StoragePaymentCreateSerializer
