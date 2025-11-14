@@ -11,7 +11,7 @@ from storage.models import (
     StorageService,
     StoragePayment,
 )
-from storage.serializers import StorageReservationCreateSerializer
+from storage.serializers.reservation_serializers import StorageReservationCreateSerializer
 from utils.businesslogic import BusinessLogic
 
 
