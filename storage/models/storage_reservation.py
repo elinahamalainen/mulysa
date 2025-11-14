@@ -107,7 +107,6 @@ class StorageReservation(models.Model):
         months_to_add = min(months, limit - current) if limit is not None else months
         self.total_paid_months = current + months_to_add
 
-        # Päivitetään end_date aina total_paid_months mukaan
         self.end_date = self.start_date + relativedelta(months=self.total_paid_months)
 
         self.save(update_fields=["status", "paid_at", "total_paid_months", "end_date"])
@@ -118,6 +117,17 @@ class StorageReservation(models.Model):
         today = timezone.now().date()
         if self.status == self.PENDING and today > self.pending_until:
             self.status = self.EXPIRED
+            self.save(update_fields=["status"])
+            return True
+        return False
+
+    def complete(self):
+        """
+        Mark reservation as completed.
+        """
+        today = timezone.now().date()
+        if self.status == self.ACTIVE and self.end_date < today:
+            self.status = self.COMPLETED
             self.save(update_fields=["status"])
             return True
         return False
@@ -142,8 +152,7 @@ class StorageReservation(models.Model):
         else:
             months_to_add = months
 
-        new_total = current + months_to_add
-        self.total_paid_months = new_total
+        self.total_paid_months = current + months_to_add
         self.end_date = self.start_date + relativedelta(months=self.total_paid_months)
 
         self.save(update_fields=["end_date", "total_paid_months"])
