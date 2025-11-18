@@ -79,6 +79,8 @@ class StorageReservation(models.Model):
     paid_at = models.DateTimeField(
         verbose_name=_("Paid at"),
         help_text=_("Timestamp when the reservation was paid."),
+        null=True,
+        blank=True
     )
 
     created_at = models.DateTimeField(
