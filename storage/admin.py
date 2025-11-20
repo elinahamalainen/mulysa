@@ -40,7 +40,9 @@ class StorageReservationAdmin(admin.ModelAdmin):
         "paid_at",
     ]
 
-    readonly_fields = ["created_at",]
+    readonly_fields = [
+        "created_at",
+    ]
 
 
 class StoragePaymentAdmin(admin.ModelAdmin):

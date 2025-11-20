@@ -6,12 +6,14 @@ from .views.reservation_views import (
     ReservationViewSet,
     PaymentViewSet,
 )
+from .views.admin_views import StorageAdminViewSet
 
 router = DefaultRouter()
 router.register(r"services", StorageViewSet, basename="service")
 router.register(r"units", StorageUnitViewSet, basename="unit")
 router.register(r"reservations", ReservationViewSet, basename="reservation")
 router.register(r"payments", PaymentViewSet, basename="payment")
+router.register(r"admin/storage", StorageAdminViewSet, basename="storage-admin")
 
 urlpatterns = [
     path("", include(router.urls)),
