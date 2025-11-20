@@ -7,7 +7,7 @@ from .views.reservation_views import (
     PaymentViewSet,
 )
 from .views.admin_views import StorageAdminViewSet
-from storage import views
+from .views.frontend_views import reservation_table
 
 router = DefaultRouter()
 router.register(r"services", StorageViewSet, basename="service")
@@ -17,8 +17,6 @@ router.register(r"payments", PaymentViewSet, basename="payment")
 router.register(r"admin/storage", StorageAdminViewSet, basename="storage-admin")
 
 urlpatterns = [
-    path("", include(router.urls)),
-    path("", views.reservation_table, name="reservation_table"),
-    path("reserve/<int:unit_id>/", views.make_reservation, name="make_reservation"),
+    path("api/", include(router.urls)),
+    path("", reservation_table, name="reservation_table"),
 ]
-

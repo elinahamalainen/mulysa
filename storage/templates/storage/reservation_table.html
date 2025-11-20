@@ -75,9 +75,7 @@
                     <span class="text">{% trans 'Reserved' %}</span>
 
                     {% else %}
-                    <button class="btn btn-primary" onclick="openReservationModal('{{ unit.id }}', '{{ unit.name }}', '{{ unit.price_per_month }}')">
-                        {% trans 'Reserve' %}
-                    </button>
+                    <button class="btn btn-primary" onclick="openReservationModal('{{ unit.id }}', '{{ unit.name }}', '{{ unit.price_per_month }}', '{{ unit.service.pending_payment_days }}')"> {% trans 'Reserve' %} </button>
                     
                 </td>
                 {% endif %}
@@ -112,7 +110,7 @@
 
             <hr>
 
-            <p>{% trans 'You have 5 days to pay after reservation or your reservation will be cancelled' %}</p>
+            <p>{% trans 'You have' %} <span id="pendingDays"></span> {% trans 'days to pay after reservation or your reservation will be cancelled' %}</p>
 
             <button type="submit" class="btn btn-primary mt-3 w-100">
                 {% trans "Reserve" %}
@@ -126,12 +124,15 @@
 </div>
 
 <script>
-function openReservationModal(unitId, unitName, unitPrice) {
+function openReservationModal(unitId, unitName, unitPrice, pendingDays) {
     unitPrice = Number(unitPrice);
 
     document.getElementById("modalTitle").innerText = "Reserve " + unitName;
     document.getElementById("unitPrice").value = unitPrice;
     document.getElementById("unitIdInput").value = unitId;
+
+    // Show pending days dynamically
+    document.getElementById("pendingDays").innerText = pendingDays;
 
     document.getElementById("reservationForm").action = "/storage/reserve/" + unitId + "/";
 
@@ -150,6 +151,35 @@ function openReservationModal(unitId, unitName, unitPrice) {
 function closeReservationModal() {
     document.getElementById("reservationModal").style.display = "none";
 }
+
+document.getElementById("reservationForm").onsubmit = async function(e) {
+    e.preventDefault();
+
+    const unitId = document.getElementById("unitIdInput").value;
+    const months = document.getElementById("months").value;
+
+    const body = {
+        unit: unitId,
+        duration_months: Number(months),
+    };
+
+    const resp = await fetch("/storage/api/reservations/", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": "{{ csrf_token }}",
+        },
+        body: JSON.stringify(body),
+    });
+
+    if (resp.ok) {
+        window.location.reload();
+    } else {
+        const err = await resp.json();
+        alert("Failed to create reservation:\n" + JSON.stringify(err));
+    }
+};
+
 </script>
 
 {% endblock %}
