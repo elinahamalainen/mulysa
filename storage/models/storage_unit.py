@@ -95,7 +95,7 @@ class StorageUnit(models.Model):
         """Return the active reservation for this unit, if one exists."""
         StorageReservation = apps.get_model("storage", "StorageReservation")
         return StorageReservation.objects.filter(
-            unit=self, status=StorageReservation.ACTIVE
+            unit=self, status__in=[StorageReservation.ACTIVE, StorageReservation.PENDING]
         ).first()
 
     def get_current_renter(self):
