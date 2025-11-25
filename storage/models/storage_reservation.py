@@ -126,3 +126,34 @@ class StorageReservation(models.Model):
         self.end_date = self.start_date + relativedelta(months=self.total_paid_months)
         self.save(update_fields=["end_date", "total_paid_months"])
         return months_to_add
+    
+
+    def total_price(self):
+        """
+        Calculate total price for reservation
+        """
+
+        if self.total_paid_months is not None and self.total_paid_months > 0:
+            months = self.total_paid_months
+
+        else:
+            if self.start_date and self.end_date:
+                delta = relativedelta(self.end_date, self.start_date)
+                months = delta.years * 12 + delta.months
+                if delta.days > 0:
+                    months += 1
+            else:
+                return None
+
+        return months * self.unit.price_per_month
+    
+    def months_left(self):
+        """
+        Calculate how many months reservation can be extended
+        """
+        if not self.unit.max_rental_months:
+            return None
+        remaining_months = self.unit.max_rental_months - self.total_paid_months
+        return max(0, remaining_months)
+    
+    
