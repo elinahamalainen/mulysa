@@ -26,7 +26,7 @@
             <td>{{ reservation.status }}</td>
             <td>{{ reservation.unit.price_per_month }}</td>
             <td>{{ reservation.reference_number }}</td>
-            <td>{{ reservation.total_amount }}</td>
+            <td>{{ reservation.amount }}</td>
             <td>
                 <button class="btn btn-primary">
                     {% trans 'Continue reservation' %}
@@ -48,7 +48,6 @@
             <tr>
                 <th>{% trans 'Name' %}</th>
                 <th>{% trans 'Status' %}</th>
-                <th>{% trans 'Reserved by' %}</th>
                 <th>{% trans 'Reservation time' %}</th>
                 <th>{% trans 'Price per month' %}</th>
                 <th>{% trans 'Actions' %}</th>
@@ -60,9 +59,8 @@
             <tr>
                 <td>{{ unit.name }}</td>
                 <td>{{ unit.status }}</td>
-                <td>{{ unit.reserved_by }}</td>
                 <td>
-                    {% if unit.reservation %}
+                    {% if unit.status == "Reserved" %}
                     {{ unit.reservation.start_date }} - {{ unit.reservation.end_date }}
                     {% endif %}
                 </td>
@@ -75,8 +73,13 @@
                     <span class="text">{% trans 'Reserved' %}</span>
 
                     {% else %}
-                    <button class="btn btn-primary" onclick="openReservationModal('{{ unit.id }}', '{{ unit.name }}', '{{ unit.price_per_month }}', '{{ unit.service.pending_payment_days }}')"> {% trans 'Reserve' %} </button>
-                    
+                    <button class="btn btn-primary" onclick="openReservationModal(
+                        '{{ unit.id }}',
+                        '{{ unit.name }}',
+                        '{{ unit.price_per_month }}',
+                        '{{ unit.service.pending_payment_days }}',
+                        '{{ unit.max_rental_months }}')"> 
+                        {% trans 'Reserve' %} </button> 
                 </td>
                 {% endif %}
             </tr>
@@ -95,11 +98,7 @@
             <input type="hidden" name="unit_id" id="unitIdInput">
 
             <label>{% trans 'Reservation length (months)' %}</label>
-            <select name="months" id="months" class="form-control">
-                <option value="1">1 kk</option>
-                <option value="2">2 kk</option>
-                <option value="3">3 kk</option>
-            </select>
+            <select name="months" id="months" class="form-control"></select>
 
             <label class="mt-2">{% trans "Price per month" %}</label>
             <input type="text" id="unitPrice" class="form-control" disabled>
@@ -107,6 +106,9 @@
             <label class="mt-2">{% trans "Total price" %}</label>
             <input type="text" id="totalPrice" class="form-control" disabled>
             <input type="hidden" name="total_price" id="totalPriceHidden">
+
+            <p id="startDate" class="mt-2"></p>
+            <p id="endDate"></p>
 
             <hr>
 
@@ -124,8 +126,8 @@
 </div>
 
 <script>
-function openReservationModal(unitId, unitName, unitPrice, pendingDays) {
-    unitPrice = Number(unitPrice);
+function openReservationModal(unitId, unitName, unitPrice, pendingDays, maxMonths) {
+    unitPrice = parseFloat(String(unitPrice).replace(",", "."));
 
     document.getElementById("modalTitle").innerText = "Reserve " + unitName;
     document.getElementById("unitPrice").value = unitPrice;
@@ -136,20 +138,35 @@ function openReservationModal(unitId, unitName, unitPrice, pendingDays) {
 
     document.getElementById("reservationForm").action = "/storage/reserve/" + unitId + "/";
 
-    //Price calc
-    document.getElementById("months").onchange = function() {
-        const months = Number(this.value);
-        document.getElementById("totalPrice").value = (months * unitPrice);
-    };
+    const monthSelector = document.getElementById("months");
+    monthSelector.innerHTML = "";
+    for (let i = 1; i <= maxMonths; i++) {
+        monthSelector.innerHTML += `<option value="${i}">${i} kk</option>`;
+    }
 
-    document.getElementById("months").value = "1";
-    document.getElementById("totalPrice").value = unitPrice;
+    monthSelector.onchange = updatePriceAndDates;
+
+    updatePriceAndDates();
 
     document.getElementById("reservationModal").style.display = "block";
 }
 
 function closeReservationModal() {
     document.getElementById("reservationModal").style.display = "none";
+}
+
+function updatePriceAndDates() {
+    const months = Number(document.getElementById("months").value);
+    const unitPrice = parseFloat(document.getElementById("unitPrice").value);
+
+    document.getElementById("totalPrice").value = (months * unitPrice);
+
+    const start = new Date();
+    const end = new Date();
+    end.setMonth(end.getMonth() + months);
+
+    document.getElementById("startDate").innerText = "Reservation starts " + start.toISOString().split("T")[0];
+    document.getElementById("endDate").innerText = "Reservation ends " + end.toISOString().split("T")[0];
 }
 
 document.getElementById("reservationForm").onsubmit = async function(e) {
