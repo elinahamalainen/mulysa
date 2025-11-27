@@ -95,15 +95,9 @@ class StorageUnit(models.Model):
         """Return the active reservation for this unit, if one exists."""
         StorageReservation = apps.get_model("storage", "StorageReservation")
         return StorageReservation.objects.filter(
-            unit=self, status__in=[StorageReservation.ACTIVE, StorageReservation.PENDING]
+            unit=self,
+            status__in=[StorageReservation.ACTIVE, StorageReservation.PENDING],
         ).first()
-
-    def get_current_renter(self):
-        """Return the renter's name if public visibility is allowed."""
-        reservation = self.current_reservation()
-        if reservation and self.show_name_publicly:
-            return reservation.user.first_name
-        return None
 
     def get_current_renter_admin(self):
         """Return the renter's name always (for admin use)."""
@@ -116,6 +110,9 @@ class StorageUnit(models.Model):
         """Return the active reservation’s payment reference number, if any."""
         reservation = self.current_reservation
         return reservation.reference_number if reservation else None
+
+    def reservation_history(self):
+        return self.storagereservation_set.order_by("-start_date")
 
     @property
     def status(self):
