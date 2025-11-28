@@ -19,6 +19,7 @@
         </tr>
     </thead>
     <tbody>
+        {% if reservations %}
         {% for reservation in reservations %}
         <tr>
             <td>{{ reservation.unit.name }}</td>
@@ -28,16 +29,24 @@
             <td>{{ reservation.reference_number }}</td>
             <td>{{ reservation.total_price }}</td>
             <td>
-                <button class="btn btn-primary">
+                {% if reservation.months_left and reservation.months_left > 0 %}
+                <button class="btn btn-primary" onclick="openReservationExtensionModal(
+                    '{{ reservation.id }}',
+                    '{{ reservation.unit.name }}',
+                    '{{ reservation.unit.price_per_month }}',
+                    '{{ reservation.reference_number }}',
+                    '{{ reservation.months_left }}')"> 
                     {% trans 'Continue reservation' %}
                 </button>
+                {% endif %}
             </td>
         </tr>
-        {% empty %}
+        {% endfor %}
+        {% else %}
         <tr>
             <td colspan="7">{% trans 'No reservations' %}</td>
         </tr>
-        {% endfor %}
+        {% endif %}
     </tbody>
     </table>
 
@@ -50,6 +59,11 @@
                 <th>{% trans 'Status' %}</th>
                 <th>{% trans 'Reservation time' %}</th>
                 <th>{% trans 'Price per month' %}</th>
+
+                {% if user.is_staff %}
+                <th>{% trans 'Reserved by' %}</th>
+                {% endif %}
+
                 <th>{% trans 'Actions' %}</th>
             </tr>
         </thead>
@@ -65,7 +79,18 @@
                     {% endif %}
                 </td>
                 <td>{{ unit.price_per_month }} €</td>
+
+                {% if user.is_staff %}
+                <td>{{ unit.get_current_renter_admin }}</td>
+                {% endif %}
+
                 <td>
+                    {% if user.is_staff %}
+                    <button class="btn btn-secondary" onclick="openUnitHistoryModal(
+                        '{{ unit.id }}')">
+                        {% trans 'Show history' %}</button>
+                    {% endif %}
+                    
                     {% if unit.is_disabled %}
                     <span class="text">{% trans 'Disabled' %}</span>
 
@@ -79,7 +104,7 @@
                         '{{ unit.price_per_month }}',
                         '{{ unit.service.pending_payment_days }}',
                         '{{ unit.max_rental_months }}')"> 
-                        {% trans 'Reserve' %} </button> 
+                        {% trans 'Reserve' %} </button>    
                 </td>
                 {% endif %}
             </tr>
@@ -125,27 +150,42 @@
     </div>
 </div>
 
+<div id="historyModal" class="modal hidden" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6);">
+    <div style="background:white; width:500px; margin:80px auto; padding:20px; border-radius:8px;">
+        <h3>{% trans 'Reservation history' %}</h3>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{% trans 'Reservation time' %}</th>
+                    <th>{% trans 'User' %}</th>
+                    <th>{% trans 'Status' %}</th>
+                </tr>
+            </thead>
+
+            <tbody id="historyTableBody"></tbody>
+        </table>
+
+        <button class="btn btn-secondary mt-2 w-100" onclick="closeUnitHistoryModal()">
+            {% trans "Cancel" %}
+        </button>
+    </div>
+</div>
+
 <script>
 function openReservationModal(unitId, unitName, unitPrice, pendingDays, maxMonths) {
+    window.reservationMode = "new";
+    window.reservationId = null;
+
     unitPrice = parseFloat(String(unitPrice).replace(",", "."));
 
     document.getElementById("modalTitle").innerText = "Reserve " + unitName;
     document.getElementById("unitPrice").value = unitPrice;
     document.getElementById("unitIdInput").value = unitId;
 
-    // Show pending days dynamically
     document.getElementById("pendingDays").innerText = pendingDays;
 
-    document.getElementById("reservationForm").action = "/storage/reserve/" + unitId + "/";
-
-    const monthSelector = document.getElementById("months");
-    monthSelector.innerHTML = "";
-    for (let i = 1; i <= maxMonths; i++) {
-        monthSelector.innerHTML += `<option value="${i}">${i} kk</option>`;
-    }
-
-    monthSelector.onchange = updatePriceAndDates;
-
+    monthSelector(maxMonths);
     updatePriceAndDates();
 
     document.getElementById("reservationModal").style.display = "block";
@@ -161,43 +201,129 @@ function updatePriceAndDates() {
 
     document.getElementById("totalPrice").value = (months * unitPrice);
 
-    const start = new Date();
-    const end = new Date();
+    let start, end;
+
+    if (window.reservationMode === "extend" && window.currentEndDate) {
+        start = new Date(window.currentEndDate);
+        end = new Date(window.currentEndDate);
+    } else {
+        start = new Date();
+        end = new Date();
+    }
+
     end.setMonth(end.getMonth() + months);
 
     document.getElementById("startDate").innerText = "Reservation starts " + start.toISOString().split("T")[0];
     document.getElementById("endDate").innerText = "Reservation ends " + end.toISOString().split("T")[0];
 }
 
+function openReservationExtensionModal(reservationId, unitName, unitPrice, monthsLeft, currentEndDate) {
+    window.reservationMode = "extend";
+    window.reservationId = reservationId;
+    window.currentEndDate = currentEndDate;
+
+    unitPrice = parseFloat(String(unitPrice).replace(",", "."));
+
+    document.getElementById("modalTitle").innerText='Extend reservation for unit ' + unitName;
+    document.getElementById("unitPrice").value = unitPrice;
+    document.getElementById("pendingDays").innerText = "-";
+    document.getElementById("unitIdInput").value = "";
+
+    monthSelector(monthsLeft);
+    updatePriceAndDates();
+
+    document.getElementById("reservationModal").style.display = "block";
+}
+
+function monthSelector(maxMonths) {
+    const monthSelector = document.getElementById("months");
+    monthSelector.innerHTML = "";
+    for (let i = 1; i <= maxMonths; i++) {
+        monthSelector.innerHTML += `<option value="${i}">${i} kk</option>`;
+    }
+    monthSelector.onchange = () => updatePriceAndDates();
+}
+
+async function openUnitHistoryModal(unitId) {
+    const resp = await fetch(`/storage/api/admin/storage/${unitId}/reservation_history/`);
+    const history = await resp.json();
+    fillHistoryModal(history);
+
+    document.getElementById("historyModal").style.display = "block";
+
+}
+
+function closeUnitHistoryModal() {
+    document.getElementById("historyModal").style.display = "none";
+}
+
+function fillHistoryModal(history) {
+    const tbody = document.getElementById("historyTableBody");
+    tbody.innerHTML = "";
+
+    history.forEach(item => {
+        tbody.insertAdjacentHTML("beforeend", `
+            <tr>
+                <td>${item.start_date} - ${item.end_date ?? "-"}</td>
+                <td>${item.user_name} (${item.user_email})</td>
+                <td>${item.status}</td>
+            </tr>`);
+    });
+}
+
 document.getElementById("reservationForm").onsubmit = async function(e) {
     e.preventDefault();
 
-    const unitId = document.getElementById("unitIdInput").value;
     const months = document.getElementById("months").value;
+    const unitPrice = Number(document.getElementById("unitPrice").value);
 
-    const body = {
-        unit: unitId,
-        duration_months: Number(months),
-    };
+    // New reservation
+    if (window.reservationMode === "new") {
+        const unitId = document.getElementById("unitIdInput").value;
 
-    const resp = await fetch("/storage/api/reservations/", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": "{{ csrf_token }}",
-        },
-        body: JSON.stringify(body),
-    });
+        const resp = await fetch("/storage/api/reservations/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}",
+            },
+            body: JSON.stringify({
+                unit: unitId,
+                duration_months: months
+            }),
+        });
 
-    if (resp.ok) {
-        window.location.reload();
-    } else {
-        const err = await resp.json();
-        alert("Failed to create reservation:\n" + JSON.stringify(err));
+        if (resp.ok) {
+            return window.location.reload();
+        } else {
+            const err = await resp.json();
+            return alert("Failed to create reservation:\n" + JSON.stringify(err));
+        }
+    }
+
+    // Extend reservation
+    if (window.reservationMode === "extend") {
+        const resp = await fetch("/storage/api/payments/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}",
+            },
+            body: JSON.stringify({
+                reservation: window.reservationId,
+                months: months,
+                amount: months * unitPrice
+            }),
+        });
+
+        if (resp.ok) {
+            return window.location.reload();
+        } else {
+            const err = await resp.json();
+            return alert("Failed to extend reservation:\n" + JSON.stringify(err));
+        }
     }
 };
-
 </script>
 
 {% endblock %}
-
